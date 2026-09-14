@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Wire — a small group chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #12201d;
+    --panel: #1a2b27;
+    --panel-alt: #223a34;
+    --line: #2d4a42;
+    --text: #eee6d6;
+    --muted: #86a89e;
+    --accent: #e2a23b;
+    --accent-dim: #8a6423;
+    --danger: #c0654f;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-width: 640px;
+    margin: 0 auto;
+    border-left: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+  }
+
+  /* ---- Join screen ---- */
+  #join-screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 24px;
+    text-align: center;
+  }
+  #join-screen h1 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.6rem;
+    letter-spacing: 0.02em;
+    margin: 0;
+    color: var(--accent);
+  }
+  #join-screen p {
+    margin: 0;
+    color: var(--muted);
+    max-width: 32ch;
+    line-height: 1.5;
+  }
+  #name-input, #pin-input, #admin-code {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1rem;
+    padding: 12px 14px;
+    width: 100%;
+    max-width: 280px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    color: var(--text);
+  }
+  #name-input:focus, #pin-input:focus, #admin-code:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  #join-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.95rem;
+    padding: 11px 22px;
+    background: var(--accent);
+    border: none;
+    border-radius: 4px;
+    color: #1a1206;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  #join-btn:hover { background: #f0b455; }
+  #join-error { color: var(--danger); font-size: 0.85rem; min-height: 1.2em; }
+
+  /* ---- Chat screen ---- */
+  #chat-screen {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+  }
+  #chat-screen.active { display: flex; }
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+  #status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+    flex-shrink: 0;
+  }
+  header h2 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.95rem;
+    margin: 0;
+    letter-spacing: 0.02em;
+  }
+  header span.sub {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  #log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .msg {
+    position: relative;
+    max-width: 78%;
+    padding: 8px 30px 8px 12px;
+    border-radius: 3px;
+    background: var(--panel-alt);
+    border-left: 2px solid var(--line);
+    line-height: 1.4;
+    font-size: 0.95rem;
+    word-wrap: break-word;
+  }
+  .msg .delete-btn {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.9rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 2px 4px;
+  }
+  .msg .delete-btn:hover { color: var(--danger); }
+  .msg.own {
+    align-self: flex-end;
+    border-left: 2px solid var(--accent);
+    background: #24352b;
+  }
+  .msg .who {
+    display: block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--accent);
+    margin-bottom: 3px;
+    letter-spacing: 0.02em;
+  }
+  .msg.own .who { color: var(--muted); }
+  .system-msg {
+    align-self: center;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+  }
+  #rules-box {
+    align-self: stretch;
+    background: var(--panel-alt);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+  }
+  #rules-box .rules-title {
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--accent);
+    font-size: 0.8rem;
+    margin-bottom: 4px;
+  }
+  #rules-box ul {
+    margin: 0;
+    padding-left: 18px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  form#send-form {
+    display: flex;
+    gap: 8px;
+    padding: 12px 14px;
+    border-top: 1px solid var(--line);
+    background: var(--panel);
+  }
+  #text-input {
+    flex: 1;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.95rem;
+    padding: 10px 12px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    color: var(--text);
+  }
+  #text-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  #send-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    padding: 10px 18px;
+    background: var(--accent);
+    border: none;
+    border-radius: 4px;
+    color: #1a1206;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  #send-btn:hover { background: #f0b455; }
+  #send-btn:disabled { opacity: 0.5; cursor: default; }
+  #chat-error {
+    color: var(--danger);
+    font-size: 0.8rem;
+    padding: 0 14px 8px;
+    min-height: 1.1em;
+  }
+  #char-counter {
+    align-self: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    padding: 0 4px;
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <div id="join-screen">
+    <h1>THE WIRE</h1>
+   <p>A small live chat room. Pick a name and a PIN, do NOT forget your pin, you will not get back without it— the first person to use a name claims it, so only you can use it after that.</p>
+    <input id="name-input" type="text" maxlength="24" placeholder="Your name" autocomplete="off" />
+    <input id="pin-input" type="password" maxlength="20" placeholder="PIN (yours to remember)" autocomplete="off" />
+    <input id="admin-code" type="password" maxlength="64" placeholder="Admin code (optional)" autocomplete="off" />
+    <button id="join-btn">Join chat</button>
+    <div id="join-error"></div>
+  </div>
+
+  <div id="chat-screen">
+    <header>
+      <span id="status-dot"></span>
+      <h2>the wire</h2>
+      <span class="sub" id="me-label"></span>
+    </header>
+    <div id="log"></div>
+    <div id="chat-error"></div>
+    <form id="send-form">
+      <input id="text-input" type="text" maxlength="500" placeholder="Type a message…" autocomplete="off" />
+      <span id="char-counter">0/500</span>
+      <button id="send-btn" type="submit">Send</button>
+    </form>
+  </div>
+
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+  import {
+    getDatabase, ref, push, remove, get, set, onChildAdded, onChildRemoved, query,
+    limitToLast, serverTimestamp, off
+  } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
+
+  // ---------------------------------------------------------------
+  // 1. PASTE YOUR OWN FIREBASE PROJECT CONFIG HERE.
+  //    You get this from the Firebase console after creating a
+  //    project — see the setup instructions that came with this file.
+  // ---------------------------------------------------------------
+   const firebaseConfig = {
+    apiKey: "AIzaSyBI-9-Z57-g1YLS-rAhsJdw5eUsKgvPKlA",
+    authDomain: "chatforsite-25eaf.firebaseapp.com",
+    databaseURL: "https://chatforsite-25eaf-default-rtdb.firebaseio.com",
+    projectId: "chatforsite-25eaf",
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  const messagesRef = ref(db, "messages");
+  const recentMessagesQuery = query(messagesRef, limitToLast(50));
+
+  // ---------------------------------------------------------------
+  // 2. SET YOUR OWN ADMIN PASSCODE. Whoever enters this on the join
+  //    screen gets a delete button on every message. Keep in mind
+  //    anyone who views this page's source can find it — treat it
+  //    as a convenience gate, not real security.
+  // ---------------------------------------------------------------
+  const ADMIN_CODE = "11/04/10";
+
+  let myName = "";
+  let isAdmin = false;
+
+  const joinScreen = document.getElementById("join-screen");
+  const chatScreen = document.getElementById("chat-screen");
+  const nameInput = document.getElementById("name-input");
+  const pinInput = document.getElementById("pin-input");
+  const adminCodeInput = document.getElementById("admin-code");
+  const joinBtn = document.getElementById("join-btn");
+  const joinError = document.getElementById("join-error");
+  const meLabel = document.getElementById("me-label");
+  const log = document.getElementById("log");
+  const sendForm = document.getElementById("send-form");
+  const textInput = document.getElementById("text-input");
+  const sendBtn = document.getElementById("send-btn");
+  const chatError = document.getElementById("chat-error");
+  const charCounter = document.getElementById("char-counter");
+
+  // ---------------------------------------------------------------
+  // Word filter. Add or remove words freely — one per entry, all
+  // lowercase. Matching is whole-word (so "assess" won't trip on
+  // "ass") and catches common letter-swaps like "b4d" or "s#it".
+  // ---------------------------------------------------------------
+  const bannedWords = ["fuck", "bitch", "bastard", "cunt", "slut", "whore", "nigga", "nigger", "chink", "beaner", "blackie", "motherfucker"];
+
+  const leetMap = { "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "@": "a", "$": "s" };
+
+  function normalizeWord(word) {
+    return word
+      .toLowerCase()
+      .split("")
+      .map((ch) => leetMap[ch] || ch)
+      .join("")
+      .replace(/[^a-z]/g, "");
+  }
+
+  function findBannedWord(text) {
+    const words = text.split(/\s+/);
+    for (const w of words) {
+      if (bannedWords.includes(normalizeWord(w))) return true;
+    }
+    return false;
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function addMessageToLog(key, name, text, mine) {
+    const el = document.createElement("div");
+    el.className = "msg" + (mine ? " own" : "");
+    el.dataset.key = key;
+    const deleteBtn = isAdmin ? `<button class="delete-btn" title="Delete message" data-key="${key}">✕</button>` : "";
+    el.innerHTML = `<span class="who">${escapeHtml(name)}</span>${escapeHtml(text)}${deleteBtn}`;
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+
+    if (isAdmin) {
+      el.querySelector(".delete-btn").addEventListener("click", () => {
+        remove(ref(db, "messages/" + key));
+      });
+    }
+  }
+
+  function removeMessageFromLog(key) {
+    const el = log.querySelector(`[data-key="${key}"]`);
+    if (el) el.remove();
+  }
+
+  // ---------------------------------------------------------------
+  // Rules shown once, right after someone joins. Edit freely.
+  // ---------------------------------------------------------------
+  const RULES = [
+    "be kind — no harassment, hate speech, or targeting people.",
+    "no drama or site is shutting down, admin will get me",
+    "no spam or flooding the chat.",
+    "messages are limited to 500 characters.",
+    "sending messages too quickly will pause you for a few seconds.",
+    "have fun, but not too much fun",
+  ];
+
+  function showRules() {
+    const el = document.createElement("div");
+    el.id = "rules-box";
+    el.innerHTML =
+      `<div class="rules-title">Chat rules</div><ul>` +
+      RULES.map((r) => `<li>${escapeHtml(r)}</li>`).join("") +
+      `</ul>`;
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function addSystemMessage(text) {
+    const el = document.createElement("div");
+    el.className = "system-msg";
+    el.textContent = text;
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function nameKey(name) {
+    return encodeURIComponent(name.trim().toLowerCase());
+  }
+
+  async function joinChat() {
+    const name = nameInput.value.trim();
+    const pin = pinInput.value.trim();
+    if (!name) {
+      joinError.textContent = "Enter a name first.";
+      return;
+    }
+    if (name.length > 24) {
+      joinError.textContent = "Keep it under 24 characters.";
+      return;
+    }
+    if (!pin || pin.length < 3) {
+      joinError.textContent = "Pick a PIN (3+ characters) — you'll use it every time you join with this name.";
+      return;
+    }
+
+    joinBtn.disabled = true;
+    joinError.textContent = "Checking name…";
+
+    const claimRef = ref(db, "names/" + nameKey(name));
+    let snap;
+    try {
+      snap = await get(claimRef);
+    } catch (err) {
+      joinError.textContent = "Couldn't reach the chat right now — try again.";
+      joinBtn.disabled = false;
+      return;
+    }
+
+    if (snap.exists()) {
+      if (snap.val().pin !== pin) {
+        joinError.textContent = "That name is already claimed — enter its PIN, or pick a different name.";
+        joinBtn.disabled = false;
+        return;
+      }
+      // Correct PIN for an existing name — proceed without rewriting.
+    } else {
+      try {
+        await set(claimRef, { pin: pin });
+      } catch (err) {
+        joinError.textContent = "Couldn't claim that name right now — try again.";
+        joinBtn.disabled = false;
+        return;
+      }
+    }
+
+    myName = name;
+    isAdmin = ADMIN_CODE.length > 0 && adminCodeInput.value === ADMIN_CODE;
+    joinError.textContent = "";
+    joinScreen.style.display = "none";
+    chatScreen.classList.add("active");
+    meLabel.textContent = "you: " + myName + (isAdmin ? " (admin)" : "");
+
+    onChildAdded(recentMessagesQuery, (snapshot) => {
+      const data = snapshot.val();
+      if (!data || !data.name || !data.text) return;
+      addMessageToLog(snapshot.key, data.name, data.text, data.name === myName);
+    });
+
+    onChildRemoved(recentMessagesQuery, (snapshot) => {
+      removeMessageFromLog(snapshot.key);
+    });
+
+    showRules();
+    addSystemMessage("You joined as " + myName);
+    textInput.focus();
+  }
+
+  textInput.addEventListener("input", () => {
+    chatError.textContent = "";
+    charCounter.textContent = textInput.value.length + "/500";
+  });
+
+  joinBtn.addEventListener("click", joinChat);
+  nameInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") joinChat();
+  });
+  pinInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") joinChat();
+  });
+
+  sendForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+
+    const text = textInput.value.trim();
+    if (!text) return;
+    if (text.length > 500) {
+      chatError.textContent = "Messages can't be longer than 500 characters.";
+      return;
+    }
+    if (findBannedWord(text)) {
+      chatError.textContent = "That message can't be sent — please rephrase it.";
+      return;
+    }
+
+    chatError.textContent = "";
+    sendBtn.disabled = true;
+    push(messagesRef, {
+      name: myName,
+      text: text,
+      ts: serverTimestamp(),
+    }).finally(() => {
+      sendBtn.disabled = false;
+      textInput.value = "";
+      charCounter.textContent = "0/500";
+      textInput.focus();
+    });
+  });
+
+  window.addEventListener("beforeunload", () => {
+    off(recentMessagesQuery);
+  });
+  // Note: off() above removes all listeners on this query, covering
+  // both onChildAdded and onChildRemoved.
+</script>
+
+</body>
+</html>
